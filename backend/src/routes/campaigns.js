@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { listCampaigns, findCampaignById, createCampaign, updateCampaign } from "../models/Campaign.js";
+import { listCampaigns, findCampaignById, createCampaign, recordDonation } from "../models/Campaign.js";
+import { getDB } from "../config/database.js";
 import { createTransaction, listTransactions } from "../models/Transaction.js";
 import { createComment, getCommentsByCampaign, deleteComment, deleteCommentByCreator } from "../models/Comment.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { uploadSingle, handleImageUpload } from "../middleware/upload.js";
-import { verifyAndSubmit } from "../services/stellar.js";
+import { isValidPublicKey, parsePaymentTransaction, submitSignedTransaction } from "../services/stellar.js";
 import { sendDonationConfirmation, sendFundingMilestone } from "../services/email.js";
 
 const router = Router();
@@ -13,21 +14,55 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const { category, status, q } = req.query;
-    const campaigns = listCampaigns({ category, status, q });
+    // Only "active" and "funded" can be requested publicly; deactivated
+    // campaigns never appear in the public listing.
+    const publicStatus = status === "active" || status === "funded" ? status : undefined;
+    const campaigns = listCampaigns({
+      category: typeof category === "string" ? category : undefined,
+      status: publicStatus,
+      q: typeof q === "string" ? q : undefined,
+    });
     res.json({ campaigns });
   } catch (err) {
     res.status(500).json({ error: "Failed to load campaigns" });
   }
 });
 
+// Validate the fields of a new campaign. Returns an error message or null.
+function validateNewCampaign({ title, description, organization, category, goal, endDate, walletAddress }) {
+  const text = (v) => (typeof v === "string" ? v.trim() : "");
+  if (text(title).length < 6 || text(title).length > 120) return "Title must be 6 to 120 characters";
+  if (text(description).length < 30 || text(description).length > 5000) return "Description must be 30 to 5000 characters";
+  if (text(organization).length < 2 || text(organization).length > 120) return "Organization must be 2 to 120 characters";
+  if (text(category).length < 1 || text(category).length > 60) return "Category is required";
+  if (!Number.isFinite(goal) || goal < 100 || goal > 1_000_000_000) return "Goal must be between 100 and 1,000,000,000 XLM";
+  const end = new Date(endDate);
+  if (!endDate || Number.isNaN(end.getTime()) || end.getTime() <= Date.now()) return "End date must be a valid date in the future";
+  if (walletAddress && !isValidPublicKey(walletAddress)) return "Invalid Stellar wallet address";
+  return null;
+}
+
 // Create campaign
 router.post("/", authMiddleware, uploadSingle, handleImageUpload, async (req, res) => {
   try {
-    const { title, description, organization, category, goal, image, endDate, urgent } = req.body;
+    const { title, description, organization, category, image, endDate, urgent, walletAddress } = req.body;
+    const goal = Number(req.body.goal);
+    const error = validateNewCampaign({ title, description, organization, category, goal, endDate, walletAddress });
+    if (error) return res.status(400).json({ error });
+
     const campaign = createCampaign({
-      title, description, organization, category,
-      goal: Number(goal), image: image || null, end_date: endDate,
-      urgent: Boolean(urgent), creator_id: req.user.id,
+      title: title.trim(),
+      description: description.trim(),
+      organization: organization.trim(),
+      category: category.trim(),
+      goal,
+      image: image || null,
+      end_date: endDate,
+      // Form fields arrive as strings, so Boolean("false") would be true
+      urgent: urgent === true || urgent === "true" || urgent === "1",
+      creator_id: req.user.id,
+      // Donations go to this wallet; default to the creator's linked wallet
+      wallet_address: walletAddress || req.user.walletAddress || null,
     });
     res.status(201).json({ campaign });
   } catch (err) {
@@ -36,43 +71,62 @@ router.post("/", authMiddleware, uploadSingle, handleImageUpload, async (req, re
   }
 });
 
-// Donate to campaign
+// Donate to campaign.
+// The client sends a signed Stellar transaction. The amount, destination and
+// sender are read from that transaction and checked, never taken from
+// separate request fields.
 router.post("/:id/donate", authMiddleware, async (req, res) => {
   try {
     const campaign = findCampaignById(Number(req.params.id));
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
-    const { xdr, amount, memo } = req.body;
-    if (!xdr) return res.status(400).json({ error: "Signed transaction required" });
-    const hash = await verifyAndSubmit(xdr);
-    const newRaised = (campaign.raised || 0) + Number(amount);
-    const newDonors = (campaign.donors || 0) + 1;
-    const newStatus = newRaised >= campaign.goal ? "funded" : campaign.status;
-    updateCampaign(campaign.id, { raised: newRaised, donors: newDonors, status: newStatus });
-    const tx = createTransaction({
-      hash, from: req.user.wallet_address || "unknown",
-      to: String(campaign.id), amount: Number(amount),
-      type: "donation", status: "confirmed", memo,
-      campaign_id: campaign.id, user_id: req.user.id,
-    });
+    if (campaign.status !== "active") return res.status(409).json({ error: "This campaign is not accepting donations" });
+    if (!campaign.wallet_address) return res.status(409).json({ error: "This campaign has no donation wallet yet" });
+    if (!req.user.walletAddress) return res.status(400).json({ error: "Connect a wallet before donating" });
 
-    // Email notifications (fire-and-forget; never block the donation response)
-    sendDonationConfirmation({ donorId: req.user.id, campaignId: campaign.id, amount: Number(amount), hash }).catch((err) => {
-      console.error("[email] donation confirmation failed:", err.message);
-    });
-
-    if (newStatus === "funded" && campaign.status !== "funded") {
-      // Campaign just reached its funding goal — notify the creator
-      const updatedCampaign = findCampaignById(campaign.id);
-      if (updatedCampaign.creator_id) {
-        sendFundingMilestone({ creatorId: updatedCampaign.creator_id, campaignId: campaign.id }).catch((err) => {
-          console.error("[email] funding milestone failed:", err.message);
-        });
-      }
+    const payment = parsePaymentTransaction(req.body.xdr);
+    if (payment.destination !== campaign.wallet_address) {
+      return res.status(400).json({ error: "Transaction destination does not match the campaign wallet" });
+    }
+    if (payment.source !== req.user.walletAddress) {
+      return res.status(400).json({ error: "Transaction was not signed by your connected wallet" });
     }
 
-    res.json({ hash, campaign: findCampaignById(campaign.id), transaction: tx });
+    const hash = await submitSignedTransaction(req.body.xdr);
+
+    // Record the donation and update totals together
+    const db = getDB();
+    const record = db.transaction(() => {
+      const transaction = createTransaction({
+        hash,
+        from: payment.source,
+        to: payment.destination,
+        amount: payment.amount,
+        type: "donation",
+        status: "confirmed",
+        memo: payment.memo,
+        campaign_id: campaign.id,
+        user_id: req.user.id,
+      });
+      const updated = recordDonation(campaign.id, payment.amount);
+      return { transaction, updated };
+    });
+    const { transaction, updated } = record();
+
+    // Email notifications (fire-and-forget; never block the donation response)
+    sendDonationConfirmation({ donorId: req.user.id, campaignId: campaign.id, amount: payment.amount, hash }).catch((err) => {
+      console.error("[email] donation confirmation failed:", err.message);
+    });
+    if (updated.status === "funded" && campaign.status !== "funded" && updated.creator_id) {
+      sendFundingMilestone({ creatorId: updated.creator_id, campaignId: campaign.id }).catch((err) => {
+        console.error("[email] funding milestone failed:", err.message);
+      });
+    }
+
+    res.json({ hash, campaign: updated, transaction });
   } catch (err) {
-    res.status(500).json({ error: "Donation failed: " + err.message });
+    const status = err.status || 500;
+    if (status === 500) console.error("Donation error:", err);
+    res.status(status).json({ error: status === 500 ? "Donation failed" : err.message });
   }
 });
 

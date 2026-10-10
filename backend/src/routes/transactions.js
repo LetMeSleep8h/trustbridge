@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { listTransactions, createTransaction } from "../models/Transaction.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { getAccountBalance, verifyAndSubmit } from "../services/stellar.js";
+import { toCsv } from "../utils/csv.js";
+import { getAccountBalance, isValidPublicKey, parsePaymentTransaction, submitSignedTransaction, HORIZON_URL } from "../services/stellar.js";
 
 const router = Router();
 
@@ -24,26 +25,32 @@ router.get("/me", authMiddleware, async (req, res) => {
   }
 });
 
-// Submit signed send transaction
+// Submit a signed send transaction. Destination and amount are read from the
+// signed transaction itself.
 router.post("/send", authMiddleware, async (req, res) => {
   try {
-    const { xdr, to, amount, memo, asset } = req.body;
-    if (!xdr) return res.status(400).json({ error: "Signed transaction required" });
-    const hash = await verifyAndSubmit(xdr);
+    if (!req.user.walletAddress) return res.status(400).json({ error: "Connect a wallet before sending" });
+    const payment = parsePaymentTransaction(req.body.xdr);
+    if (payment.source !== req.user.walletAddress) {
+      return res.status(400).json({ error: "Transaction was not signed by your connected wallet" });
+    }
+    const hash = await submitSignedTransaction(req.body.xdr);
     const tx = createTransaction({
       hash,
-      from: req.user.wallet_address || "unknown",
-      to,
-      amount: Number(amount),
-      asset: asset || "XLM",
+      from: payment.source,
+      to: payment.destination,
+      amount: payment.amount,
+      asset: "XLM",
       type: "send",
       status: "confirmed",
-      memo,
+      memo: payment.memo,
       user_id: req.user.id,
     });
     res.status(201).json({ hash, transaction: tx });
   } catch (err) {
-    res.status(500).json({ error: "Transaction failed: " + err.message });
+    const status = err.status || 500;
+    if (status === 500) console.error("Send error:", err);
+    res.status(status).json({ error: status === 500 ? "Transaction failed" : err.message });
   }
 });
 
@@ -53,17 +60,14 @@ router.get("/export/csv", authMiddleware, async (req, res) => {
     const { type, q } = req.query;
     const result = listTransactions({ user_id: req.user.id, type, q, page: 1, limit: 1000 });
     const transactions = result.transactions || [];
-    const header = "Date,Type,Amount,Status,Counterparty\n";
     const rows = transactions.map((tx) => {
       const date = tx.created_at ? new Date(tx.created_at).toISOString() : "";
-      const amount = Number(tx.amount || 0);
       const counterparty = tx.type === "donation" ? (tx.campaign_title || `Campaign #${tx.campaign_id}`) : tx.to_address || "";
-      return `${date},${tx.type},${amount},${tx.status},"${counterparty.replace(/"/g, '""')}"`;
+      return [date, tx.type, Number(tx.amount || 0), tx.status, counterparty, tx.hash];
     });
-    const csv = header + rows.join("\n");
-    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", "attachment; filename=transactions.csv");
-    res.send(csv);
+    res.send(toCsv(["Date", "Type", "Amount", "Status", "Counterparty", "Hash"], rows));
   } catch (err) {
     res.status(500).json({ error: "Failed to export CSV" });
   }
@@ -71,6 +75,7 @@ router.get("/export/csv", authMiddleware, async (req, res) => {
 
 // Balance lookup
 router.get("/balance/:address", async (req, res) => {
+  if (!isValidPublicKey(req.params.address)) return res.status(400).json({ error: "Invalid Stellar address" });
   try {
     const balance = await getAccountBalance(req.params.address);
     res.json({ balance });
@@ -83,10 +88,11 @@ router.get("/balance/:address", async (req, res) => {
 router.get("/balance-history/:address", async (req, res) => {
   try {
     const { address } = req.params;
-    const { days = 30 } = req.query;
+    if (!isValidPublicKey(address)) return res.status(400).json({ error: "Invalid Stellar address" });
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
     
     // Get current balance from Horizon
-    const balResp = await fetch(`https://horizon.stellar.org/accounts/${address}`);
+    const balResp = await fetch(`${HORIZON_URL}/accounts/${address}`);
     if (!balResp.ok) {
       return res.status(500).json({ error: "Failed to fetch account from Horizon" });
     }
@@ -94,7 +100,7 @@ router.get("/balance-history/:address", async (req, res) => {
     const currentBalance = parseFloat(accountData.balances?.find((b) => b.asset_type === 'native')?.balance || '0');
     
     // Get payment operations for this address
-    const opsResp = await fetch(`https://horizon.stellar.org/accounts/${address}/payments?limit=200&order=desc`);
+    const opsResp = await fetch(`${HORIZON_URL}/accounts/${address}/payments?limit=200&order=desc`);
     if (!opsResp.ok) {
       return res.status(500).json({ error: "Failed to fetch payments from Horizon" });
     }
@@ -102,7 +108,7 @@ router.get("/balance-history/:address", async (req, res) => {
     const payments = opsData.records || [];
     
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - Number(days));
+    cutoffDate.setDate(cutoffDate.getDate() - days);
     
     // Build running balance from payment history
     const sampledPoints = {};

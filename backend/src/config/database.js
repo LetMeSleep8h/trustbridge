@@ -110,6 +110,13 @@ function initSchema() {
   if (!existing.includes('role')) {
     db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`);
   }
+
+  // Campaigns: destination wallet that receives donations
+  const campaignCols = db.prepare("PRAGMA table_info(campaigns)").all().map(r => r.name);
+  if (!campaignCols.includes('wallet_address')) {
+    db.exec(`ALTER TABLE campaigns ADD COLUMN wallet_address TEXT`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status)`);
 }
 
 export default getDB;

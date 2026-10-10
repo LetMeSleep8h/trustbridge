@@ -27,3 +27,22 @@ dist-ssr
 .env
 .env.production
 .env.local
+
+# SQLite database files (runtime data, never commit)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Tooling and build output
+.wrangler/
+.output/
+.vinxi/
+.tanstack/
+coverage/
+
+# Local environment files (keep the .example files)
+.env.*
+!.env.example
+backend/.env

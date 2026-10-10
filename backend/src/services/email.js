@@ -5,7 +5,7 @@ import { findCampaignById } from "../models/Campaign.js";
 const API_KEY = process.env.EMAIL_API_KEY;
 const FROM_EMAIL = process.env.EMAIL_FROM || "TrustBridge <onboarding@resend.dev>";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:5000";
 
 let resend = null;
 if (API_KEY) {

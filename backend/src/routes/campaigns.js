@@ -152,6 +152,9 @@ router.post("/:id/comments", authMiddleware, async (req, res) => {
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return res.status(400).json({ error: "Comment text is required" });
     }
+    if (text.trim().length > 2000) {
+      return res.status(400).json({ error: "Comments are limited to 2000 characters" });
+    }
     const comment = createComment({
       campaign_id: campaign.id,
       user_id: req.user.id,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { body, validationResult } from "express-validator";
 import { createUser, findUserByEmail, findUserById, updateUser, comparePassword, changePassword } from "../models/User.js";
+import { StrKey } from "@stellar/stellar-sdk";
 import { signToken, verifyToken } from "../middleware/auth.js";
 
 const router = Router();
@@ -61,11 +62,11 @@ router.post(
     try {
       const { email, password } = req.body;
       const user = await findUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ error: "Account not found. Please sign up first." });
-      }
-      if (!(await comparePassword(user, password))) {
-        return res.status(401).json({ error: "Incorrect password" });
+      // Same message for unknown email and wrong password so the endpoint
+      // cannot be used to discover which emails are registered.
+      // Accounts created through GitHub have no password and cannot use this route.
+      if (!user || !user.password || !(await comparePassword(user, password))) {
+        return res.status(401).json({ error: "Invalid email or password" });
       }
       const token = signToken(user);
       res.json({ token, user: serializeUser(user) });
@@ -101,6 +102,18 @@ router.put("/profile", async (req, res) => {
     const fields = {};
     for (const key of allowedFields) {
       if (req.body[key] !== undefined) fields[key] = req.body[key];
+    }
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === null) continue;
+      if (typeof value !== "string") {
+        return res.status(400).json({ error: `Invalid value for ${key}` });
+      }
+      fields[key] = value.trim().slice(0, key === "bio" ? 1000 : 300);
+    }
+    if (fields.walletAddress) {
+      if (typeof fields.walletAddress !== "string" || !StrKey.isValidEd25519PublicKey(fields.walletAddress)) {
+        return res.status(400).json({ error: "Invalid Stellar wallet address" });
+      }
     }
     if (Object.keys(fields).length > 0) {
       await updateUser(decoded.id, fields);

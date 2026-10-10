@@ -16,43 +16,55 @@ import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
-app.use(helmet());
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
-  : ['http://localhost:5173', 'http://localhost:5000'];
+const isProduction = process.env.NODE_ENV === "production";
 
-console.log('[CORS] Allowed origins:', allowedOrigins);
+// Render (and most hosts) sit behind a reverse proxy. Without this, every
+// request appears to come from the proxy's IP and rate limits are shared.
+if (isProduction) app.set("trust proxy", 1);
+
+app.use(helmet());
+
+const DEFAULT_ORIGINS = ["http://localhost:5173", "http://localhost:5000"];
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean)
+  : DEFAULT_ORIGINS;
+
+if (!isProduction) console.log("[CORS] Allowed origins:", allowedOrigins);
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+  origin(origin, callback) {
+    // Allow requests with no origin (curl, server-to-server, health checks)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
-    // In development, allow any localhost port (avoids CORS breakage when Vite bumps ports)
-    if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
-      return callback(null, true);
-    }
-    // Also allow the known Render frontend
-    if (origin === 'https://trustbridge-frontend.onrender.com') {
-      return callback(null, true);
-    }
-    console.log('[CORS] Blocked origin:', origin);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // In development, allow any localhost port (Vite bumps ports when busy)
+    if (!isProduction && /^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
     callback(null, false);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 };
 app.use(cors(corsOptions));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: "Too many requests" } });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests" } });
 app.use("/api/", limiter);
+
+// Stricter limit on credential endpoints to slow down brute-force attempts.
+// Successful logins are not counted, so legitimate users are not locked out.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: "Too many attempts. Please try again in a few minutes." },
+});
+app.use(["/api/auth/login", "/api/auth/register", "/api/auth/change-password", "/api/auth/github/callback"], authLimiter);
+
 app.use(compression());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan("dev"));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(morgan(isProduction ? "combined" : "dev"));
 
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);

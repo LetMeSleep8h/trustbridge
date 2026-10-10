@@ -1,7 +1,23 @@
 import jwt from "jsonwebtoken";
 import { findUserById } from "../models/User.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "trustbridge_prod_secret_change_me";
+const MIN_SECRET_LENGTH = 32;
+
+function resolveJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length >= MIN_SECRET_LENGTH) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`JWT_SECRET must be set to at least ${MIN_SECRET_LENGTH} characters in production`);
+  }
+  console.warn("[auth] JWT_SECRET is missing or too short. Using an insecure development-only secret.");
+  return "development-only-insecure-secret-do-not-use-in-production";
+}
+
+const JWT_SECRET = resolveJwtSecret();
+
+export function getSigningSecret() {
+  return JWT_SECRET;
+}
 
 export function signToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });

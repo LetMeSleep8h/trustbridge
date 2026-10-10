@@ -1,10 +1,13 @@
 import { Resend } from "resend";
 import { findUserById } from "../models/User.js";
 import { findCampaignById } from "../models/Campaign.js";
+import { SIGNING_SECRET } from "../config/secret.js";
+import { createUnsubscribeToken } from "../utils/unsubscribeToken.js";
+import { escapeHtml } from "../utils/escapeHtml.js";
 
 const API_KEY = process.env.EMAIL_API_KEY;
 const FROM_EMAIL = process.env.EMAIL_FROM || "TrustBridge <onboarding@resend.dev>";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").split(",")[0].trim().replace(/\/+$/, "");
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:5000";
 
 let resend = null;
@@ -81,7 +84,7 @@ export async function sendUserEmail({ userId, subject, html }) {
   if (user.emailNotifications === 0) {
     return { sent: false, reason: "opted_out" };
   }
-  const unsubscribeUrl = `${API_BASE_URL}/api/auth/unsubscribe?email=${encodeURIComponent(user.email)}&user=${user.id}`;
+  const unsubscribeUrl = `${API_BASE_URL}/api/auth/unsubscribe?user=${user.id}&token=${createUnsubscribeToken(SIGNING_SECRET, user.id)}`;
   const htmlWithUnsubscribe = baseLayout({
     title: subject,
     bodyHtml: html,
@@ -114,8 +117,8 @@ export async function sendDonationConfirmation({ donorId, campaignId, amount, ha
   const donorName = `${donor.firstName || ""} ${donor.lastName || ""}`.trim() || "there";
   const subject = `Your donation to ${campaign.title} is confirmed`;
   const html = donationConfirmationHtml({
-    donorName,
-    campaignTitle: campaign.title,
+    donorName: escapeHtml(donorName),
+    campaignTitle: escapeHtml(campaign.title),
     amount,
     hash,
     campaignUrl: `${FRONTEND_URL}/campaigns/${campaign.id}`,
@@ -131,8 +134,8 @@ export async function sendFundingMilestone({ creatorId, campaignId }) {
   const creatorName = `${creator.firstName || ""} ${creator.lastName || ""}`.trim() || "there";
   const subject = `🎉 ${campaign.title} reached its funding goal!`;
   const html = fundingMilestoneHtml({
-    creatorName,
-    campaignTitle: campaign.title,
+    creatorName: escapeHtml(creatorName),
+    campaignTitle: escapeHtml(campaign.title),
     goal: campaign.goal,
     raised: campaign.raised,
     campaignUrl: `${FRONTEND_URL}/campaigns/${campaign.id}`,

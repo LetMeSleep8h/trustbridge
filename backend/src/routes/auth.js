@@ -4,6 +4,8 @@ import { createUser, findUserByEmail, findUserById, updateUser, comparePassword,
 import { StrKey } from "@stellar/stellar-sdk";
 import { signToken, verifyToken } from "../middleware/auth.js";
 import { serializeUser } from "../utils/serializeUser.js";
+import { SIGNING_SECRET } from "../config/secret.js";
+import { isValidUnsubscribeToken } from "../utils/unsubscribeToken.js";
 
 const router = Router();
 
@@ -127,14 +129,17 @@ router.put("/notifications", async (req, res) => {
 // Unsubscribe from email notifications (used by the unsubscribe link in emails)
 router.get("/unsubscribe", async (req, res) => {
   try {
-    const { email, user } = req.query;
-    if (!email || !user) {
-      return res.status(400).json({ error: "Missing email or user parameter" });
+    const { user, token } = req.query;
+    const userId = Number(user);
+    if (!Number.isInteger(userId) || !token) {
+      return res.status(400).json({ error: "Invalid unsubscribe link" });
     }
-    const existing = await findUserByEmail(email);
-    if (!existing || String(existing.id) !== String(user)) {
-      return res.status(404).json({ error: "User not found" });
+    // The link carries a signed token, so users cannot unsubscribe each other
+    if (!isValidUnsubscribeToken(SIGNING_SECRET, userId, token)) {
+      return res.status(400).json({ error: "Invalid or expired unsubscribe link" });
     }
+    const existing = await findUserById(userId);
+    if (!existing) return res.status(404).json({ error: "User not found" });
     await updateUser(existing.id, { emailNotifications: 0 });
     res.type("html").send(`<!DOCTYPE html>
 <html>
@@ -144,7 +149,7 @@ router.get("/unsubscribe", async (req, res) => {
     <div style="font-size:20px;font-weight:800;color:#6366f1;">TrustBridge</div>
     <h1 style="font-size:22px;color:#0f172a;margin:20px 0 8px;">You've been unsubscribed</h1>
     <p style="font-size:14px;color:#64748b;line-height:1.6;margin:0;">We won't send you any more email notifications. You can re-enable them any time from your TrustBridge account settings.</p>
-    <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/settings" style="display:inline-block;margin-top:24px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:10px;">Open Settings</a>
+    <a href="${(process.env.FRONTEND_URL || "http://localhost:5173").split(",")[0].trim()}/settings" style="display:inline-block;margin-top:24px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:10px;">Open Settings</a>
   </div>
 </body>
 </html>`);

@@ -131,6 +131,20 @@ export function getAdminCampaigns() {
 export function deactivateCampaign(id: number) {
   return request(`/admin/campaigns/${id}/deactivate`, { method: "POST" });
 }
-export function exportTransactionsCsv() {
-  return request("/transactions/export/csv");
+/** Download the signed-in user's transactions as CSV text. */
+export async function exportTransactionsCsv(params?: { type?: string; q?: string }): Promise<string> {
+  const qs = new URLSearchParams();
+  if (params?.type) qs.set("type", params.type);
+  if (params?.q) qs.set("q", params.q);
+  const query = qs.toString();
+  const token = getToken();
+  // request() always parses JSON, which fails on CSV, so fetch directly.
+  const res = await fetch(`${BASE}/transactions/export/csv${query ? `?${query}` : ""}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Export failed (${res.status})`);
+  }
+  return res.text();
 }

@@ -58,6 +58,30 @@ function Transactions() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const csv = await api.exportTransactionsCsv({ type: typeToParam[tab], q: q || undefined });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -118,25 +142,14 @@ function Transactions() {
       <AppShell title={t("transactions")} subtitle={t("overview")}>
         <div className="glass rounded-2xl p-4 mb-6 flex flex-col md:flex-row gap-3 md:items-center">
           <button
-            onClick={async () => {
-              try {
-                const res = await api.exportTransactionsCsv();
-                const blob = new Blob([res], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "transactions.csv";
-                a.click();
-                URL.revokeObjectURL(url);
-              } catch (e) {
-                console.error(e);
-              }
-            }}
-            className="h-10 px-4 rounded-lg border border-white/10 bg-white/5 text-xs font-medium inline-flex items-center justify-center gap-2 hover:bg-white/10 transition"
+            onClick={handleExport}
+            disabled={exporting}
+            className="h-10 px-4 rounded-lg border border-white/10 bg-white/5 text-xs font-medium inline-flex items-center justify-center gap-2 hover:bg-white/10 transition disabled:opacity-50"
           >
-            <Download className="w-4 h-4" />
-            Export CSV
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exporting ? "Exporting…" : "Export CSV"}
           </button>
+          {exportError && <span role="alert" className="text-xs text-red-400">{exportError}</span>}
           <div className="flex items-center gap-1 p-1 rounded-lg bg-white/5 border border-white/10 overflow-x-auto">
             {tabsKey.map((tKey) => (
               <button

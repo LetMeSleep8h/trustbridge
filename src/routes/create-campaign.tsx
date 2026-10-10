@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import AppShell from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CheckCircle2, Upload, Sparkles } from "lucide-react";
 import * as api from "@/services/api";
 
@@ -34,12 +34,17 @@ function CreateCampaign() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // A ref updates synchronously, so two clicks in the same tick cannot both start a request.
+  const inFlight = useRef(false);
 
   const update = (k: keyof typeof form, v: string | File) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlight.current) return; // ignore rapid repeat clicks while a request is in flight
     const errs: Record<string, string> = {};
     if (form.title.trim().length < 6) errs.title = "At least 6 characters.";
     if (form.org.trim().length < 2) errs.org = "Required.";
@@ -50,6 +55,9 @@ function CreateCampaign() {
     if (!form.end) errs.end = "Pick an end date.";
     setErrors(errs);
     if (Object.keys(errs).length === 0) {
+      inFlight.current = true;
+      setSubmitting(true);
+      setSubmitError(null);
       try {
         const fd = new FormData();
         fd.append("title", form.title);
@@ -64,24 +72,33 @@ function CreateCampaign() {
         setSuccess(true);
         setTimeout(() => setSuccess(false), 4000);
         setForm({ title: "", org: "", desc: "", goal: "", cat: "Food & Water", location: "", end: "", image: "" });
-      } catch (err: any) {
-        console.error("Failed to create campaign:", err);
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Failed to create campaign");
+      } finally {
+        inFlight.current = false;
+        setSubmitting(false);
       }
     }
   };
 
   return (
     <RequireAuth>
-      <AppShell title="Create Campaign" subtitle="Launch a verified humanitarian campaign on Stellar.">
+      <AppShell title="Create Campaign" subtitle="Launch a humanitarian campaign on Stellar.">
       {success && (
         <div className="mb-6 glass-strong rounded-xl p-4 flex items-center gap-3 border-emerald/30">
           <div className="w-9 h-9 rounded-lg bg-emerald/20 grid place-items-center">
             <CheckCircle2 className="w-5 h-5 text-emerald" />
           </div>
           <div>
-            <div className="font-medium">Campaign submitted</div>
-            <div className="text-xs text-muted-foreground">We'll notify you once verification is complete.</div>
+            <div className="font-medium">Campaign created</div>
+            <div className="text-xs text-muted-foreground">Your campaign is now live and visible to donors.</div>
           </div>
+        </div>
+      )}
+
+      {submitError && (
+        <div role="alert" className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          {submitError}
         </div>
       )}
 
@@ -137,12 +154,16 @@ function CreateCampaign() {
               <Sparkles className="w-4 h-4 text-emerald" /> Verification
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Campaigns go through KYB, local partner attestation, and milestone-based escrow on Stellar before going live.
+              Campaigns go live immediately. Donations are sent to the wallet linked to your profile. Administrators can deactivate campaigns that break our guidelines.
             </p>
           </div>
 
-          <button type="submit" className="w-full h-12 rounded-xl bg-gradient-brand text-primary-foreground font-medium hover:shadow-glow transition">
-            Submit for verification
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full h-12 rounded-xl bg-gradient-brand text-primary-foreground font-medium hover:shadow-glow transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {submitting ? "Creating…" : "Create campaign"}
           </button>
         </div>
       </form>

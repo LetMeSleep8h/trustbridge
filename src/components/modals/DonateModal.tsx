@@ -44,6 +44,10 @@ export default function DonateModal() {
         <div className="p-5">
           {step === 1 && (
             <>
+              <div role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+  Preview mode: on-chain donations are not enabled yet. Nothing is signed or sent, and no funds move.
+</div>
+
               <div className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
                 Select amount (XLM)
               </div>
@@ -82,7 +86,7 @@ export default function DonateModal() {
                 onClick={() => (wallet.connected ? confirm() : openWalletModal())}
                 className="mt-6 w-full h-11 rounded-xl bg-gradient-brand text-primary-foreground font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:shadow-glow transition"
               >
-                {wallet.connected ? "Confirm donation" : "Connect wallet to donate"}
+                {wallet.connected ? "Preview donation" : "Connect wallet to preview"}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </>
@@ -90,8 +94,8 @@ export default function DonateModal() {
           {step === 2 && (
             <div className="py-10 text-center">
               <Loader2 className="w-10 h-10 mx-auto text-primary animate-spin mb-4" />
-              <div className="font-medium">Broadcasting transaction…</div>
-              <div className="text-xs text-muted-foreground mt-1">Waiting for Stellar confirmation</div>
+              <div className="font-medium">Running preview…</div>
+              <div className="text-xs text-muted-foreground mt-1">No transaction is being sent</div>
             </div>
           )}
           {step === 3 && (
@@ -99,9 +103,10 @@ export default function DonateModal() {
               <div className="w-16 h-16 rounded-full bg-emerald/20 grid place-items-center mx-auto mb-4 animate-float">
                 <CheckCircle2 className="w-9 h-9 text-emerald" />
               </div>
-              <div className="font-display text-xl font-semibold">Thank you!</div>
+              <div className="font-display text-xl font-semibold">Preview complete</div>
               <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto">
-                Your {finalAmount} XLM donation to <span className="text-foreground">{donateTarget.title}</span> was confirmed on-chain.
+                This was a preview of a {finalAmount} XLM donation to <span className="text-foreground">{donateTarget.title}</span>.
+                No transaction was sent and no funds moved.
               </p>
               <div className="mt-6 flex gap-2">
                 <button onClick={closeDonate} className="flex-1 h-10 rounded-lg glass hover:border-white/25 transition text-sm">

@@ -30,6 +30,9 @@ function SendPage() {
   return (
     <AppShell title={t("send")} subtitle={t("overview")}>
       <form onSubmit={send} className="glass rounded-2xl p-6 max-w-2xl">
+        <div role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+  Preview mode: on-chain sending is not enabled yet. Nothing is signed or sent, and no funds move.
+</div>
         <Field label={t("recipientAddress", "Recipient address")}>
           <input
             value={form.to}
@@ -82,7 +85,7 @@ function SendPage() {
           disabled={sent}
           className="mt-6 w-full h-12 rounded-xl bg-gradient-brand text-primary-foreground font-medium inline-flex items-center justify-center gap-2 hover:shadow-glow transition disabled:opacity-60"
         >
-          {sent ? t("broadcasting", "Broadcasting…") : wallet.connected ? (<>Send transaction <ArrowRight className="w-4 h-4" /></>) : (<><Wallet className="w-4 h-4" /> {t("connectWallet")}</>)}
+          {sent ? "Running preview…" : wallet.connected ? (<>Preview send <ArrowRight className="w-4 h-4" /></>) : (<><Wallet className="w-4 h-4" /> {t("connectWallet")}</>)}
           {wallet.connected && !sent && <SendIcon className="w-4 h-4 hidden" />}
         </button>
       </form>

@@ -160,3 +160,13 @@ export function FakeQR({ value, size = 200 }: { value: string; size?: number }) 
     </svg>
   );
 }
+
+
+/** Shown above panels that render illustrative data instead of live platform data. */
+export function SampleDataNotice({ children }: { children?: React.ReactNode }) {
+  return (
+    <div role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+      {children ?? "Sample data: the figures below are illustrative and are not live platform statistics."}
+    </div>
+  );
+}

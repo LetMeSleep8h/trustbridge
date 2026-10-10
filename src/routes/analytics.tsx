@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import AppShell from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Progress, StatTile } from "@/components/ui-bits";
+import { Progress, StatTile, SampleDataNotice } from "@/components/ui-bits";
 import { Heart, Megaphone, Users, ArrowLeftRight, Globe } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useApp } from "@/components/AppContext";
@@ -89,6 +89,7 @@ function Analytics() {
         </div>
       }
     >
+      <SampleDataNotice />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatTile label={t("totalRaised")} value="$12.4M" delta="+8.2%" icon={Heart} />
         <StatTile label={t("campaigns")} value="342" delta="+14" icon={Megaphone} />

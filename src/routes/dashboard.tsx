@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import AppShell from "@/components/AppShell";
-import { StatTile, Badge } from "@/components/ui-bits";
+import { StatTile, Badge, SampleDataNotice } from "@/components/ui-bits";
 import { useApp } from "@/components/AppContext";
 import { RequireAuth } from "@/components/RequireAuth";
 import QRCode from "qrcode";
@@ -89,6 +89,7 @@ function Dashboard() {
           </>
         }
       >
+        <SampleDataNotice>Sample data: the recent activity list below is illustrative. Your real transactions are on the Transactions page.</SampleDataNotice>
         <div className="grid lg:grid-cols-3 gap-6">
         {/* Wallet panel - spans 2 cols */}
         <div className="lg:col-span-2 glass rounded-2xl p-4 sm:p-6">

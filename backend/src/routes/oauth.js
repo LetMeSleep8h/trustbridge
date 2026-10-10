@@ -1,88 +1,107 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import axios from "axios";
-import { createUser, findUserByEmail, findUserByGithubId, updateUser } from "../models/User.js";
+import { createUser, findUserByEmail, findUserByGithubId, findUserById, updateUser } from "../models/User.js";
 import { signToken } from "../middleware/auth.js";
+import { serializeUser } from "../utils/serializeUser.js";
 
 const router = Router();
 
-function serializeUser(user) {
-  return {
-    id: user.id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.email,
-    walletAddress: user.walletAddress,
-    avatar: user.avatar,
-    gender: user.gender,
-    country: user.country,
-    bio: user.bio,
-    facebook: user.facebook,
-    instagram: user.instagram,
-    youtube: user.youtube,
-    emailNotifications: user.emailNotifications ?? 1,
-    joined: user.created_at,
-  };
+const GITHUB_SCOPE = "read:user user:email";
+
+function frontendUrl() {
+  const first = (process.env.FRONTEND_URL || "").split(",")[0].trim().replace(/\/+$/, "");
+  return first || "http://localhost:5173";
 }
 
-// Redirect to GitHub OAuth consent screen
-router.get("/github", (req, res) => {
+function redirectUri() {
+  return `${frontendUrl()}/auth/github/callback`;
+}
+
+// Build the GitHub consent URL. The random `state` is returned to the browser,
+// which stores it and must see the same value come back on the callback
+// (checked in the frontend), preventing login CSRF.
+router.get("/github/url", (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID;
-  const redirectUri = `${process.env.FRONTEND_URL}/auth/github/callback`;
-  const scope = "read:user user:email";
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
-  res.redirect(url);
+  if (!clientId) return res.status(503).json({ error: "GitHub sign-in is not configured" });
+  const state = crypto.randomBytes(16).toString("hex");
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri(),
+    scope: GITHUB_SCOPE,
+    state,
+  });
+  res.json({ url: `https://github.com/login/oauth/authorize?${params.toString()}`, state });
 });
 
-// GitHub OAuth callback — frontend sends us the code
+// GitHub OAuth callback: the frontend sends us the one-time code.
 router.post("/github/callback", async (req, res) => {
   try {
     const { code } = req.body;
-    if (!code) return res.status(400).json({ error: "Missing code" });
+    if (!code || typeof code !== "string") return res.status(400).json({ error: "Missing code" });
 
-    const tokenRes = await axios.post("https://github.com/login/oauth/access_token", {
-      client_id: process.env.GITHUB_CLIENT_ID,
-      client_secret: process.env.GITHUB_CLIENT_SECRET,
-      code,
-      redirect_uri: `${process.env.FRONTEND_URL}/auth/github/callback`,
-    }, { headers: { Accept: "application/json" } });
+    const tokenRes = await axios.post(
+      "https://github.com/login/oauth/access_token",
+      {
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: redirectUri(),
+      },
+      { headers: { Accept: "application/json" } }
+    );
 
     const accessToken = tokenRes.data.access_token;
     if (!accessToken) return res.status(400).json({ error: "Failed to get access token" });
 
+    const headers = { Authorization: `Bearer ${accessToken}` };
     const [userRes, emailRes] = await Promise.all([
-      axios.get("https://api.github.com/user", { headers: { Authorization: `Bearer ${accessToken}` } }),
-      axios.get("https://api.github.com/user/emails", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      axios.get("https://api.github.com/user", { headers }),
+      axios.get("https://api.github.com/user/emails", { headers }),
     ]);
 
     const githubProfile = userRes.data;
-    const primaryEmail = emailRes.data.find((e) => e.primary)?.email || emailRes.data[0]?.email;
+    const githubId = String(githubProfile.id);
 
-    if (!primaryEmail) return res.status(400).json({ error: "No email found on GitHub account" });
+    // Only trust an email GitHub has verified. Otherwise anyone could add
+    // someone else's address to their GitHub account and take over that user.
+    const verified = (emailRes.data || []).filter((e) => e.verified);
+    const primaryEmail = (verified.find((e) => e.primary) || verified[0])?.email;
+    if (!primaryEmail) {
+      return res.status(400).json({ error: "Your GitHub account has no verified email address" });
+    }
+    const email = primaryEmail.toLowerCase();
 
-    let user = await findUserByGithubId(String(githubProfile.id));
+    let user = await findUserByGithubId(githubId);
     if (!user) {
-      user = await findUserByEmail(primaryEmail);
-      if (user) {
-        await updateUser(user.id, { github_id: String(githubProfile.id), auth_provider: "github", avatar: githubProfile.avatar_url || user.avatar });
+      const existing = await findUserByEmail(email);
+      if (existing) {
+        await updateUser(existing.id, {
+          github_id: githubId,
+          auth_provider: "github",
+          avatar: existing.avatar || githubProfile.avatar_url || null,
+        });
+        user = existing;
       } else {
-        const name = githubProfile.name?.split(" ") || [];
-        const firstName = name[0] || githubProfile.login || "GitHub";
-        const lastName = name.slice(1).join(" ") || "User";
-        user = await createUser({
-          firstName,
-          lastName,
-          email: primaryEmail,
+        const nameParts = githubProfile.name?.split(" ") || [];
+        const created = await createUser({
+          firstName: nameParts[0] || githubProfile.login || "GitHub",
+          lastName: nameParts.slice(1).join(" ") || "User",
+          email,
           password: null,
           avatar: githubProfile.avatar_url || null,
         });
-        await updateUser(user.id, { github_id: String(githubProfile.id), auth_provider: "github" });
+        await updateUser(created.id, { github_id: githubId, auth_provider: "github" });
+        user = created;
       }
     }
 
-    const token = signToken(user);
-    res.json({ token, user: serializeUser(user) });
+    // Re-read so the response always includes role and current profile data.
+    const fresh = await findUserById(user.id);
+    const token = signToken(fresh);
+    res.json({ token, user: serializeUser(fresh) });
   } catch (err) {
-    console.error("GitHub OAuth error:", err);
+    console.error("GitHub OAuth error:", err.message);
     res.status(500).json({ error: "GitHub sign-in failed" });
   }
 });

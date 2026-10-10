@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useApp } from "@/components/AppContext";
 import * as api from "@/services/api";
 
@@ -11,11 +11,17 @@ export const Route = createFileRoute("/auth/github/callback")({
 function GithubCallback() {
   const nav = useNavigate();
   const { setUser } = useApp();
+  // The one-time code and state may only be used once; guard against effects
+  // running twice (React StrictMode in development).
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    if (!code) {
+    // Reject the callback unless the state matches the one this browser started with.
+    if (!code || !api.consumeGithubState(params.get("state"))) {
       nav({ to: "/login" });
       return;
     }

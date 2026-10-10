@@ -109,13 +109,14 @@ function LoginPage() {
             </div>
           </div>
 
-          <a
-            href={`${import.meta.env.VITE_API_URL}/auth/github`}
+          <button
+            type="button"
+            onClick={() => api.startGithubLogin().catch(() => {})}
             className="mt-4 w-full h-11 rounded-xl border border-white/10 bg-white/5 text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-white/10 transition"
           >
             <Github className="w-4 h-4" />
             Sign in with GitHub
-          </a>
+          </button>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account? <Link to="/signup" className="text-primary hover:underline">Sign up</Link>

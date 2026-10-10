@@ -1,7 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://trustbridge-7dch.onrender.com/api";
+export const API_URL: string = import.meta.env.VITE_API_URL || "https://trustbridge-7dch.onrender.com/api";
 const BASE = API_URL;
-console.log("📡 TrustBridge API URL:", API_URL);
-console.log("📤 Using base:", BASE);
 
 function getToken(): string | null {
   return localStorage.getItem("trustbridge_token");
@@ -16,7 +14,6 @@ async function request(path: string, options: RequestInit = {}): Promise<any> {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const url = `${BASE}${path}`;
-  console.log(`📤 API Request: ${options.method || "GET"} ${url}`);
   const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -106,6 +103,22 @@ export function getBalanceHistory(address: string, days?: number) {
   const params = days ? `?days=${days}` : "";
   return request(`/transactions/balance-history/${address}${params}`);
 }
+const OAUTH_STATE_KEY = "trustbridge_oauth_state";
+
+/** Ask the API for the GitHub consent URL, remember the anti-CSRF state, and redirect. */
+export async function startGithubLogin() {
+  const { url, state } = await request("/auth/github/url");
+  sessionStorage.setItem(OAUTH_STATE_KEY, state);
+  window.location.href = url;
+}
+
+/** Returns true only if the state GitHub echoed back matches the one we stored. */
+export function consumeGithubState(returned: string | null): boolean {
+  const expected = sessionStorage.getItem(OAUTH_STATE_KEY);
+  sessionStorage.removeItem(OAUTH_STATE_KEY);
+  return !!expected && !!returned && expected === returned;
+}
+
 export function githubCallback(code: string) {
   return request("/auth/github/callback", { method: "POST", body: JSON.stringify({ code }) });
 }

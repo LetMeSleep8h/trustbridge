@@ -3,28 +3,9 @@ import { body, validationResult } from "express-validator";
 import { createUser, findUserByEmail, findUserById, updateUser, comparePassword, changePassword } from "../models/User.js";
 import { StrKey } from "@stellar/stellar-sdk";
 import { signToken, verifyToken } from "../middleware/auth.js";
+import { serializeUser } from "../utils/serializeUser.js";
 
 const router = Router();
-
-function serializeUser(user) {
-  return {
-    id: user.id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.email,
-    walletAddress: user.walletAddress,
-    avatar: user.avatar,
-    gender: user.gender,
-    country: user.country,
-    bio: user.bio,
-    facebook: user.facebook,
-    instagram: user.instagram,
-    youtube: user.youtube,
-    emailNotifications: user.emailNotifications ?? 1,
-    role: user.role || "user",
-    joined: user.created_at,
-  };
-}
 
 // Register
 router.post(

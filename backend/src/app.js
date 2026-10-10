@@ -7,8 +7,6 @@ import compression from "compression";
 
 import campaignRoutes from "./routes/campaigns.js";
 import transactionRoutes from "./routes/transactions.js";
-import walletRoutes from "./routes/wallet.js";
-import analyticsRoutes from "./routes/analytics.js";
 import healthRoutes from "./routes/health.js";
 import authRoutes from "./routes/auth.js";
 import oauthRoutes from "./routes/oauth.js";
@@ -72,8 +70,6 @@ app.use("/api/auth", oauthRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/transactions", transactionRoutes);
-app.use("/api/wallet", walletRoutes);
-app.use("/api/analytics", analyticsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Not Found", message: `Route ${req.method} ${req.originalUrl} not found` });

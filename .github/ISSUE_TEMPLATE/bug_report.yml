@@ -1,0 +1,36 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Never paste secrets** (API keys, tokens, private keys). For security problems use the Security tab instead of a public issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and version, OS, wallet (Freighter or Lobstr) if relevant
+      placeholder: Chrome 126, Windows 11, Freighter 5.x
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Drag images here. Remove any tokens or personal data first.

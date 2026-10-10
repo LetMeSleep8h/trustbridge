@@ -1,431 +1,182 @@
-# 🛡️ TrustBridge — Humanitarian Aid on Stellar
-
-> **Decentralized humanitarian aid platform. Transparent. Trustless. Borderless.**
-
-TrustBridge connects donors directly to verified humanitarian campaigns using the **Stellar blockchain**. Every donation is recorded on-chain with 4.2-second settlement and near-zero fees - no intermediaries, no hidden costs, no delays.
-
----
-
-## ✨ Features
-
-### 🔐 Authentication & Profile
-| Feature | Status |
-|---------|--------|
-| Email & Password Sign Up (bcrypt + JWT) | ✅ Live |
-| Login with distinct error messages | ✅ Live |
-| Avatar Selection (7 DiceBear avatars) | ✅ Live |
-| Profile with Gender, Country, Bio, Social Links | ✅ Live |
-| Change Password | ✅ Live |
-| 2FA, Device Management (Coming Soon) | ⏳ Planned |
-
-### 💰 Wallet System
-| Feature | Status |
-|---------|--------|
-| Freighter Wallet Detection | ✅ Live |
-| Lobstr Wallet Detection | ✅ Live |
-| xBull Wallet Detection | ✅ Live |
-| Albedo Wallet Detection | ✅ Live |
-| WalletConnect QR | ✅ Live |
-| Manual Stellar Address Input | ✅ Live |
-| Real-time XLM Balance from Horizon | ✅ Live |
-
-### 📊 Campaigns & Donations
-| Feature | Status |
-|---------|--------|
-| Browse Campaigns (filter by category, search) | ✅ Live |
-| Create Campaign (with verification) | ✅ Live |
-| Donate via Stellar | ✅ Live |
-| Real-time Progress Tracking | ✅ Live |
-| Campaign Analytics Dashboard | ✅ Live |
-
-### 🔒 Security
-- Passwords hashed with **bcrypt** (10 rounds)
-- JWT tokens with 7-day expiry
-- SQLite with WAL mode for concurrent reads
-- Rate limiting on API endpoints
-- CORS restricted to frontend origins
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Browser (Vite SSR)                │
-│  TanStack Router + React 19 + Tailwind CSS 4        │
-│  Port: 5173                                          │
-└────────────────┬────────────────────────────────────┘
-                 │ HTTP / JSON
-                 ▼
-┌─────────────────────────────────────────────────────┐
-│              Express.js API Server                   │
-│  auth, campaigns, transactions, analytics, wallet    │
-│  Port: 5000                                          │
-└────────────────┬────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────┐
-│              SQLite (better-sqlite3)                 │
-│  Tables: users, campaigns, transactions              │
-│  WAL mode for concurrent reads                       │
-└─────────────────────────────────────────────────────┘
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend Framework** | React 19 + TypeScript |
-| **Meta-Framework** | TanStack Start (SSR) |
-| **Routing** | TanStack Router v1 |
-| **Styling** | Tailwind CSS v4 |
-| **UI Icons** | Lucide React |
-| **Blockchain** | @stellar/stellar-sdk |
-| **Backend** | Express.js |
-| **Database** | SQLite (better-sqlite3) |
-| **Auth** | bcrypt + jsonwebtoken |
-| **Wallet** | Freighter, Lobstr, xBull, Albedo, WalletConnect |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js ≥ 20
-- npm ≥ 9
-
-### 1. Clone & Install
-
-```bash
-cd TrustBridge
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd backend && npm install && cd ..
-```
-
-### 2. Environment
-
-The backend uses default configuration — no `.env` changes needed for development:
-
-```env
-PORT=5000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-```
-
-### 3. Start Development Servers
-
-**Terminal 1 — Backend API:**
-```bash
-cd backend && node server.js
-# → http://localhost:5000
-# → 🚀 TrustBridge API Server
-```
-
-**Terminal 2 — Frontend (SSR):**
-```bash
-npm run dev
-# → http://localhost:5173
-```
-
-### 4. Open the App
-
-```
-http://localhost:5173/signup
-```
-
----
-
-## 📋 API Reference
-
-Base URL: `https://trustbridge-7dch.onrender.com/api`
-
-### Authentication
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/register` | Create account |
-| `POST` | `/api/auth/login` | Sign in |
-| `GET` | `/api/auth/me` | Get profile (auth) |
-| `PUT` | `/api/auth/profile` | Update profile (auth) |
-| `PUT` | `/api/auth/change-password` | Change password (auth) |
-
-**POST /api/auth/register**
-```json
-{
-  "firstName": "Jane",
-  "lastName": "Doe",
-  "email": "jane@example.com",
-  "password": "securepassword",
-  "confirmPassword": "securepassword",
-  "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane",
-  "gender": "female",
-  "country": "United States",
-  "bio": "Humanitarian activist",
-  "facebook": "https://facebook.com/jane",
-  "instagram": "https://instagram.com/jane"
-}
-```
-
-**Response:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "user": {
-    "id": 1,
-    "firstName": "Jane",
-    "lastName": "Doe",
-    "email": "jane@example.com",
-    "walletAddress": null,
-    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane",
-    "gender": "female",
-    "country": "United States",
-    "bio": "Humanitarian activist",
-    "facebook": "https://facebook.com/jane",
-    "instagram": "https://instagram.com/jane",
-    "youtube": null,
-    "joined": "2026-07-14 00:00:00"
-  }
-}
-```
-
-### Campaigns
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/campaigns` | List campaigns |
-| `GET` | `/api/campaigns/:id` | Get campaign |
-| `POST` | `/api/campaigns` | Create campaign (auth) |
-| `POST` | `/api/campaigns/:id/donate` | Donate (auth) |
-
-### Transactions
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/transactions/me` | My transactions (auth) |
-| `POST` | `/api/transactions/send` | Send XLM (auth) |
-| `GET` | `/api/transactions/balance/:address` | Get balance |
-
-### Health
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/health` | Server health check |
-
----
-
-## 🚀 Live URLs
-
-- **Backend API:** https://trustbridge-7dch.onrender.com
-- **Frontend:** (deploy on Render and update this URL)
-- **Health Check:** https://trustbridge-7dch.onrender.com/api/health
-
----
-
-## 🗄️ Database Schema
-
-```sql
--- Users table (all profile fields)
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  firstName TEXT NOT NULL,
-  lastName TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  walletAddress TEXT,
-  avatar TEXT,
-  gender TEXT,
-  country TEXT,
-  bio TEXT,
-  facebook TEXT,
-  instagram TEXT,
-  youtube TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- Campaigns
-CREATE TABLE campaigns (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
-  organization TEXT NOT NULL,
-  category TEXT NOT NULL,
-  goal REAL NOT NULL,
-  raised REAL DEFAULT 0,
-  donors INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'active',
-  creator_id INTEGER REFERENCES users(id),
-  end_date TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-
--- Transactions
-CREATE TABLE transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  hash TEXT NOT NULL,
-  amount REAL NOT NULL,
-  type TEXT NOT NULL,
-  status TEXT DEFAULT 'confirmed',
-  user_id INTEGER REFERENCES users(id),
-  campaign_id INTEGER REFERENCES campaigns(id),
-  created_at TEXT DEFAULT (datetime('now'))
-);
-```
-
----
-
-## 📸 Screenshots
-
-### Sign Up Page
-```
-┌─────────────────────────────────────────────────────┐
-│                   🛡️ TrustBridge                     │
-│               Create account                         │
-│                                                      │
-│  ┌──────────────┐ ┌──────────────┐                   │
-│  │ First Name   │ │ Last Name    │                   │
-│  └──────────────┘ └──────────────┘                   │
-│  ┌──────────────────────────────────────┐            │
-│  │ ✉️ Email                            │            │
-│  └──────────────────────────────────────┘            │
-│  ┌──────────────┐ ┌──────────────┐                   │
-│  │ 🔒 Password  │ │ 🔒 Confirm   │                   │
-│  └──────────────┘ └──────────────┘                   │
-│  [7 Avatar Circles]                                  │
-│  ┌──────────────┐ ┌──────────────┐                   │
-│  │ Gender ▼     │ │ Country ▼    │                   │
-│  └──────────────┘ └──────────────┘                   │
-│  ┌──────────────────────────────────────┐            │
-│  │ Bio (optional)                       │            │
-│  └──────────────────────────────────────┘            │
-│  ┌──────────────────────────────────────┐            │
-│  │ Social Media Links (optional)        │            │
-│  └──────────────────────────────────────┘            │
-│                                                      │
-│  ┌──────────────────────────────────────┐            │
-│  │         🚀 Create Account            │            │
-│  └──────────────────────────────────────┘            │
-└─────────────────────────────────────────────────────┘
-```
-
-### Profile Page
-```
-┌─────────────────────────────────────────────────────┐
-│  Profile                                            │
-│                                                      │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐│
-│  │  Avatar      │ │ Statistics   │ │ Recent       ││
-│  │  Name        │ │ Camp: 0     │ │ Activity     ││
-│  │  Email       │ │ Don: 0      │ │ No activity  ││
-│  │  Country     │ │ XLM: 0      │ │ yet.         ││
-│  │  Bio         │ └──────────────┘ └──────────────┘│
-│  │  Social      │                                   │
-│  └──────────────┘                                   │
-└─────────────────────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Deployment
-
-### Backend (Render)
-
-1. Create a new **Web Service** on Render
-2. Connect your GitHub repo
-3. Settings:
-   - **Root Directory:** `backend`
-   - **Build Command:** `npm install`
-   - **Start Command:** `node server.js`
-   - **Environment:** Node
-4. Add environment variables:
-   ```env
-   PORT=5000
-   NODE_ENV=production
-   FRONTEND_URL=https://your-frontend-url.onrender.com
-   ```
-5. Deploy
-
-**Live Backend:** https://trustbridge-7dch.onrender.com
-
-### Frontend (Render Static Site)
-
-1. Create a new **Static Site** on Render
-2. Connect your GitHub repo
-3. Settings:
-   - **Build Command:** `npm run build`
-   - **Publish Directory:** `.output/public`
-4. Add environment variable:
-   ```env
-   VITE_API_URL=https://trustbridge-7dch.onrender.com/api
-   ```
-5. Deploy
-
----
-
-## 🧪 Testing
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push: `git push origin feat/amazing-feature`
-5. Open a Pull Request
-
-### Code Style
-- TypeScript strict mode
-- ESLint + Prettier
-- Components in `src/components/`
-- Routes in `src/routes/`
-- API functions in `src/services/api.ts`
-
----
-
-## 🧪 Testing Checklist
-
-| Test | Expected |
-|------|----------|
-| Go to `/signup` | ✅ Signup form loads |
-| Fill all fields and submit | ✅ Redirects to Dashboard |
-| Go to `/login` | ✅ Login form loads |
-| Enter correct credentials | ✅ Redirects to Dashboard |
-| Enter wrong password | ❌ Shows "Incorrect password" |
-| Enter non-existent email | ❌ Shows "Account not found. Please sign up first." |
-| Try `/dashboard` without login | ✅ Redirects to `/login` |
-| Logout → try Dashboard | ✅ Redirects to `/login` |
-| Go to `/profile` | ✅ Shows user's data |
-| Change password in Settings | ✅ Updates in DB |
-| Connect Freighter wallet | ✅ Shows ✅ DETECTED |
-| Enter manual Stellar address | ✅ Verifies on Horizon |
-
----
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## ⚡ Roadmap
-
-- [ ] **Two-Factor Authentication (2FA)**
-- [ ] **Biometric Authentication** (Face ID / Fingerprint)
-- [ ] **Device Management & Session Control**
-- [ ] **Login History & Audit Logs**
-- [ ] **Mobile App** (React Native)
-- [ ] **Multi-chain Support** (Soroban smart contracts)
-- [ ] **DAO Governance** for campaign verification
-
----
-
 <div align="center">
-  <sub>Built with ❤️ on the Stellar Network</sub>
-  <br />
-  <sub>© 2026 TrustBridge. Transparency in action.</sub>
+
+# TrustBridge
+
+**Transparent humanitarian aid donations on the Stellar blockchain.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Stellar](https://img.shields.io/badge/built%20on-Stellar-black.svg)](https://stellar.org)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Report a bug](../../issues/new/choose)
+
 </div>
+
+---
+
+## Overview
+
+TrustBridge connects donors with humanitarian campaigns and makes every contribution traceable. Donors browse campaigns, connect a Stellar wallet, and follow transactions publicly on the ledger. Campaign creators publish a goal and receive donations directly to their own wallet. Administrators can deactivate campaigns that break the platform's guidelines.
+
+> **Project status: active development.** Accounts, campaigns, wallets, transaction history and notifications work today. **On-chain donations and sending are not wired up yet**; the Donate and Send screens run in clearly labelled *preview mode*, and the backend verification they will use is already in place. See [Status](#status) for the full picture.
+
+## Status
+
+| Area | State | Notes |
+| --- | --- | --- |
+| Email and password accounts (JWT) | Working | bcrypt hashing, rate-limited login |
+| GitHub sign-in | Working | Verified emails only, CSRF `state` check |
+| Browse and search campaigns | Working | Search is debounced and API-backed |
+| Create campaigns with image upload | Working | Cloudinary; validation on server |
+| Freighter wallet | Working | Detect, connect, balance |
+| Lobstr wallet | Working | Detect and connect |
+| Transaction history, filters, CSV export | Working | Paginated; CSV is formula-safe |
+| Email notifications (Resend) | Working | Signed one-click unsubscribe |
+| Admin dashboard (`/admin`) | Working | Stats, campaign list, deactivate |
+| Multilingual UI | Working | English, Spanish, French, Arabic, Chinese |
+| **On-chain donations** | **Preview** | Backend verifies signed transactions; UI signing flow still to build |
+| **Sending XLM** | **Preview** | Same as above |
+| Dashboard and Analytics figures | Sample data | Clearly labelled; real aggregates planned |
+| xBull, Albedo, WalletConnect | Not started | Open for contribution |
+| Two-factor authentication | Not started | Open for contribution |
+
+## How it works
+
+```
+ Browser (React SPA)                       Express API                      Stellar
+┌──────────────────────┐   HTTPS / JSON   ┌───────────────────┐
+│ TanStack Start (SPA) │ ───────────────▶ │ Auth · Campaigns  │
+│ Freighter / Lobstr   │                  │ Transactions      │ ───▶  Horizon (testnet or mainnet)
+│ extension wallets    │ ◀─────────────── │ Admin · Email     │
+└──────────┬───────────┘                  └─────────┬─────────┘
+           │ sign transaction (XDR)                 │
+           └──────── POST /campaigns/:id/donate ────┤  verifies source, destination
+                                                    │  and amount from the signed XDR,
+                                                    ▼  then submits and records it
+                                              SQLite (better-sqlite3)
+```
+
+Donation integrity is enforced on the server: the amount, destination and sender are read from the signed transaction itself, so a client cannot claim a different amount than it actually paid.
+
+## Tech stack
+
+- **Frontend:** React 18, TanStack Start/Router (SPA mode), Vite, TypeScript, Tailwind CSS v4
+- **Backend:** Node.js (ESM), Express 4, SQLite via `better-sqlite3`, JWT, bcrypt
+- **Blockchain:** Stellar SDK 16, Freighter and Lobstr wallet APIs
+- **Services:** Resend (email), Cloudinary (images), GitHub OAuth
+- **Testing:** Node's built-in test runner
+
+## Quick start
+
+**Requirements:** Node.js 20 or newer, npm, Git.
+
+```bash
+git clone https://github.com/trustbridge-platform/trustbridge.git
+cd trustbridge
+
+# 1. API (terminal 1)
+cd backend
+cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
+npm install
+npm run dev                 # http://localhost:5000
+
+# 2. Frontend (terminal 2, from the repository root)
+cp .env.example .env.local  # Windows PowerShell: Copy-Item .env.example .env.local
+npm install
+npm run dev                 # http://localhost:5173
+```
+
+The SQLite database is created automatically on first run. Optional services (email, image upload, GitHub sign-in) are skipped when their keys are missing, so you can run the whole app locally with only the defaults. Set `STELLAR_NETWORK=testnet` for development.
+
+### Configuration
+
+All variables are documented in [`backend/.env.example`](backend/.env.example) and [`.env.example`](.env.example).
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | frontend | API base URL, including `/api` |
+| `PORT`, `NODE_ENV` | API | Server port and mode |
+| `FRONTEND_URL` | API | Allowed CORS origin(s) (comma-separated), OAuth redirect and email links |
+| `JWT_SECRET` | API | **Required in production**, at least 32 characters |
+| `STELLAR_NETWORK` | API | `testnet` or `mainnet` (defaults to `mainnet`) |
+| `EMAIL_API_KEY`, `EMAIL_FROM`, `API_BASE_URL` | API | Resend notifications and unsubscribe links |
+| `CLOUDINARY_*` | API | Campaign image upload |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | API | GitHub sign-in |
+
+### Scripts
+
+| Command | Where | Does |
+| --- | --- | --- |
+| `npm run dev` | root, `backend/` | Start the dev server |
+| `npm run build` | root | Production build of the SPA |
+| `npm run lint` | root | ESLint |
+| `npm test` | `backend/` | Run backend tests |
+
+## API overview
+
+Base path `/api`. Routes marked 🔒 need `Authorization: Bearer <token>`.
+
+| Area | Endpoints |
+| --- | --- |
+| Auth | `POST /auth/register`, `POST /auth/login`, 🔒 `GET /auth/me`, 🔒 `PUT /auth/profile`, 🔒 `PUT /auth/notifications`, 🔒 `PUT /auth/change-password`, `GET /auth/unsubscribe` |
+| GitHub | `GET /auth/github/url`, `POST /auth/github/callback` |
+| Campaigns | `GET /campaigns`, `GET /campaigns/:id`, 🔒 `POST /campaigns`, 🔒 `POST /campaigns/:id/donate` |
+| Comments | 🔒 `POST /campaigns/:id/comments`, 🔒 `DELETE /campaigns/:campaignId/comments/:commentId` |
+| Transactions | 🔒 `GET /transactions/me`, 🔒 `POST /transactions/send`, 🔒 `GET /transactions/export/csv`, `GET /transactions/balance/:address`, `GET /transactions/balance-history/:address` |
+| Admin | 🔒 admin only: `GET /admin/stats`, `GET /admin/campaigns`, `POST /admin/campaigns/:id/deactivate` |
+| Health | `GET /health`, `GET /health/ping` |
+
+## Project structure
+
+```
+src/                 React app
+  routes/            File-based routes (TanStack)
+  components/        Layout, modals, shared UI
+  services/api.ts    API client
+  lib/               Wallet detection and helpers
+  i18n/              Translations
+backend/
+  server.js          Entry point
+  src/app.js         Express app, CORS, rate limiting
+  src/routes/        auth, oauth, campaigns, transactions, admin, health
+  src/models/        SQLite data access
+  src/services/      Stellar, email, image upload
+  src/middleware/    JWT auth, admin guard, upload
+  test/              Node test runner suites
+```
+
+## Deployment
+
+TrustBridge runs as two services, for example on [Render](https://render.com):
+
+1. **API** (Web Service, root directory `backend`): build `npm install`, start `node server.js`. Set `NODE_ENV=production`, a strong `JWT_SECRET` and `FRONTEND_URL`. Attach a persistent disk if you need the SQLite data to survive redeploys.
+2. **Frontend** (Static Site): build `npm install && npm run build`, publish `.output/public`, and set `VITE_API_URL` to the API URL ending in `/api`. Add a rewrite of `/*` to `/index.html` for client-side routing.
+
+In production the API refuses to start without a valid `JWT_SECRET`.
+
+## Security
+
+- Passwords are hashed with bcrypt; tokens are signed JWTs.
+- Login and registration are rate-limited, and login does not reveal whether an email exists.
+- GitHub sign-in uses a random `state` and only trusts emails GitHub has verified.
+- Donation amounts and destinations are verified from the signed Stellar transaction.
+- CSV exports neutralise spreadsheet formulas; user content is escaped in emails.
+
+Found a vulnerability? Please follow [SECURITY.md](SECURITY.md) and do not open a public issue.
+
+## Roadmap
+
+- [ ] Connect the Donate and Send screens to wallet signing and the verified API
+- [ ] Additional wallets: xBull, Albedo, WalletConnect
+- [ ] Two-factor authentication
+- [ ] Real aggregates for the Dashboard and Analytics pages
+- [ ] Broader automated test coverage (API integration, frontend)
+- [ ] Campaign milestones and fund-release rules
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), pick an issue labelled `good first issue` or `help wanted`, and open a pull request. Everyone participating is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+Released under the [MIT License](LICENSE).

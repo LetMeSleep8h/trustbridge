@@ -1,4 +1,4 @@
-export const API_URL: string = import.meta.env.VITE_API_URL || "https://trustbridge-7dch.onrender.com/api";
+export const API_URL: string = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const BASE = API_URL;
 
 function getToken(): string | null {

@@ -46,7 +46,7 @@ The database is created automatically on first run. Optional services (email, im
 2. Comment on the issue with a short note on how you plan to approach it, then wait for a maintainer to **assign** it to you. This avoids two people building the same thing.
 3. If you go quiet for 7 days we may unassign you so someone else can help. Tell us if you need more time.
 
-**Grainlify / GrainHack issues** are assigned by Grainlify's draw, not by comment. Follow the instructions on the issue and do not start work before you are assigned.
+**Drips Wave issues.** During a [Drips Wave](https://docs.drips.network/wave), issues that are part of the program carry the `Stellar Wave` label. Apply for the issue in the Drips Wave app instead of commenting here, and wait until a maintainer accepts your application and assigns you. Do not start work before you are assigned. When you open your pull request, link the issue with `Closes #123` so it can be verified and rewarded.
 
 Have an idea that is not listed? Open a [feature request](../../issues/new/choose) first so we can agree on scope before you invest time.
 

@@ -18,6 +18,8 @@
 
 TrustBridge connects donors with humanitarian campaigns and makes every contribution traceable. Donors browse campaigns, connect a Stellar wallet, and follow transactions publicly on the ledger. Campaign creators publish a goal and receive donations directly to their own wallet. Administrators can deactivate campaigns that break the platform's guidelines.
 
+**Live demo:** [trustbridge-frontend-rzkz.onrender.com](https://trustbridge-frontend-rzkz.onrender.com) (hosted on a free tier: the first request after a quiet period can take about a minute, and demo data may be reset, see [Deployment](#deployment)).
+
 > **Project status: active development.** Accounts, campaigns, wallets, transaction history and notifications work today. **On-chain donations and sending are not wired up yet**; the Donate and Send screens run in clearly labelled *preview mode*, and the backend verification they will use is already in place. See [Status](#status) for the full picture.
 
 ## Status
@@ -149,10 +151,15 @@ backend/
 
 TrustBridge runs as two services, for example on [Render](https://render.com):
 
-1. **API** (Web Service, root directory `backend`): build `npm install`, start `node server.js`. Set `NODE_ENV=production`, a strong `JWT_SECRET` and `FRONTEND_URL`. Attach a persistent disk if you need the SQLite data to survive redeploys.
-2. **Frontend** (Static Site): build `npm install && npm run build`, publish `.output/public`, and set `VITE_API_URL` to the API URL ending in `/api`. Add a rewrite of `/*` to `/index.html` for client-side routing.
+1. **API** (Web Service, root directory `backend`): build `npm install`, start `node server.js`. Set these environment variables:
+   - `NODE_ENV=production`
+   - `JWT_SECRET`: a random string of at least 32 characters (the API refuses to start without it)
+   - `FRONTEND_URL`: the exact public URL of the frontend, with no trailing slash
+   - `API_BASE_URL`: the public URL of the API itself, used in email unsubscribe links
+   - `STELLAR_NETWORK`: `mainnet` or `testnet`
+2. **Frontend** (Static Site): build `npm install && npm run build`, publish `.output/public`, and set `VITE_API_URL` to the API URL ending in `/api`. This value is read at build time, so rebuild after changing it. Add a rewrite of `/*` to `/index.html` for client-side routing.
 
-In production the API refuses to start without a valid `JWT_SECRET`.
+> **Data persistence.** The API stores data in a SQLite file. On hosts without a persistent disk (including Render's free plan), that file is wiped on every deploy and restart, so accounts and campaigns do not survive. For anything beyond a demo, attach a persistent disk or move to a hosted database (an open roadmap item).
 
 ## Security
 
@@ -168,6 +175,7 @@ Found a vulnerability? Please follow [SECURITY.md](SECURITY.md) and do not open 
 
 - [ ] Connect the Donate and Send screens to wallet signing and the verified API
 - [ ] Additional wallets: xBull, Albedo, WalletConnect
+- [ ] Move from SQLite to a hosted database so data survives redeploys
 - [ ] Two-factor authentication
 - [ ] Real aggregates for the Dashboard and Analytics pages
 - [ ] Broader automated test coverage (API integration, frontend)
